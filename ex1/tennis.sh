@@ -6,6 +6,7 @@ player1_points=50
 player2_points=50
 game_over=0
 
+#print the board following the current winner
 print_board () {
     echo " Player 1: ${player1_points}         Player 2: ${player2_points} "
     echo -e " --------------------------------- \n |       |       #       |       | \n |       |       #       |       | "
@@ -37,7 +38,8 @@ print_board () {
 
 }
 
-read_picks() {
+#read the players' picks
+read_a_pick() {
     if [[ $1 == 1 ]]; then
         echo "PLAYER 1 PICK A NUMBER: " >&2
     elif [[ $1 == 2 ]]; then
@@ -58,8 +60,9 @@ read_picks() {
 
     #return the number
     echo $number
- }
+}
 
+#this function updates the ball state following the current move of the players
 change_ball_state() {
     if [ "$1" -gt "$2" ]; then
         if [ "$ball_state" -lt "1" ]; then
@@ -76,10 +79,11 @@ change_ball_state() {
     fi    
 }
 
+#the game flow function
 game() {
     #get moves from the players
-    player1_choice=$(read_picks "1" "$player1_points" | tail -n "1")
-    player2_choice=$(read_picks "2" "$player2_points" | tail -n "1")
+    player1_choice=$(read_a_pick "1" "$player1_points" | tail -n "1")
+    player2_choice=$(read_a_pick "2" "$player2_points" | tail -n "1")
 
     #change the ball state after the move
     change_ball_state "$player1_choice" "$player2_choice"
@@ -93,14 +97,17 @@ game() {
     echo -e "       Player 1 played: ${player1_choice}\n       Player 2 played: ${player2_choice}\n\n"
 }
 
+#check if the game is over after each move
 check_win() {
 
-    if [ $ball_state == "3" ] || ( [ $player1_points -gt "0" ] && [ $player2_points == "0" ] ) || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -gt "0" ] ); then
+    if [ $ball_state == "3" ] || ( [ $player1_points -gt "0" ] && [ $player2_points == "0" ] ) \
+    || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -gt "0" ] ); then
         echo "PLAYER 1 WINS !"
         game_over=1
     fi
 
-    if [[ $ball_state == "-3" ]] || ( [ $player1_points == "0" ] && [ $player2_points -gt "0" ] ) || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -lt "0" ] ); then
+    if [[ $ball_state == "-3" ]] || ( [ $player1_points == "0" ] && [ $player2_points -gt "0" ] ) \
+    || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -lt "0" ] ); then
         echo "PLAYER 2 WINS !"
         game_over=1
     fi
