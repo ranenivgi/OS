@@ -99,7 +99,12 @@ game() {
 
 #check if the game is over after each move
 check_win() {
-
+    #check if both chose max points in the first move
+    if [ $ball_state == "0" ] && ( [ $player1_points == "0" ] && [ $player2_points == "0" ] ); then
+        echo "IT'S A DRAW !"
+        game_over=1
+    fi
+    
     if [ $ball_state == "3" ] || ( [ $player1_points -gt "0" ] && [ $player2_points == "0" ] ) \
     || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -gt "0" ] ); then
         echo "PLAYER 1 WINS !"
