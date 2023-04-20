@@ -99,23 +99,46 @@ game() {
 
 #check if the game is over after each move
 check_win() {
+    game_over=1
+    
     #check if both chose max points in the first move
     if [ $ball_state == "0" ] && ( [ $player1_points == "0" ] && [ $player2_points == "0" ] ); then
         echo "IT'S A DRAW !"
-        game_over=1
-    fi
-    
-    if [ $ball_state == "3" ] || ( [ $player1_points -gt "0" ] && [ $player2_points == "0" ] ) \
-    || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -gt "0" ] ); then
-        echo "PLAYER 1 WINS !"
-        game_over=1
+        return
     fi
 
-    if [[ $ball_state == "-3" ]] || ( [ $player1_points == "0" ] && [ $player2_points -gt "0" ] ) \
-    || ( [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -lt "0" ] ); then
-        echo "PLAYER 2 WINS !"
-        game_over=1
+    if [ $ball_state == "3" ]; then
+        echo "PLAYER 1 WINS !"
+        return
     fi
+
+    if [[ $ball_state == "-3" ]]; then
+        echo "PLAYER 2 WINS !"
+        return
+    fi
+
+    if [ $player1_points -gt 0 ] && [ $player2_points == "0" ]; then
+        echo "PLAYER 1 WINS !"
+        return
+    fi
+
+    if [ $player1_points == "0" ] && [ $player2_points -gt "0" ]; then
+        echo "PLAYER 2 WINS !"
+        return
+    fi
+
+    if [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -gt "0" ]; then
+        echo "PLAYER 1 WINS !"
+        return
+    fi
+
+    if [ $player1_points == "0" ] && [ $player2_points == "0" ] && [ $ball_state -lt "0" ]; then
+        echo "PLAYER 2 WINS !"
+        return
+    fi
+
+    #if none of the above happens make the game continue
+    game_over=0
 }
 
 main() {
