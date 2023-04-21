@@ -6,7 +6,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-void split_words (char **src, char* dest) {
+void split_words(char **src, char *dest)
+{
     int i = 0;
     char *token = strtok(dest, " ");
     while (token != NULL)
@@ -18,7 +19,8 @@ void split_words (char **src, char* dest) {
 }
 
 // executes the "cd" command
-int cd_command (char** src) {
+int cd_command(char **src)
+{
     if (strcmp(src[0], "cd") == 0)
     {
         if (chdir(src[1]) != 0)
@@ -31,7 +33,8 @@ int cd_command (char** src) {
 }
 
 // executes the "history" command
-int history_command (char** current_command, int history_counter, int* pid_history, char** commands_history) {
+int history_command(char **current_command, int history_counter, int *pid_history, char **commands_history)
+{
     if (strcmp(current_command[0], "history") == 0)
     {
         for (int i = 0; i <= history_counter; i++)
@@ -65,26 +68,39 @@ int main(int argc, char *argv[])
         printf("$ ");
         fflush(stdout);
         memset(command, '\0', sizeof(command));
-        scanf(" %[^\n]", command);
+        scanf("%[^\n\r]", command);
 
-        // add the command and the pid to the history
-        commands_history[history_counter] = strdup(command);
-        pid_history[history_counter] = getpid();
+        //consume the carriage and copy the command
+        getchar();
+        char copy_command[100];
+        strcpy(copy_command, command);
 
         // split the command into words
         split_words(current_command_split, command);
-        
-        // check and execute "cd" and "history" commands
-        if (cd_command(current_command_split)
-        || history_command (current_command_split, history_counter, pid_history, commands_history)) {
+
+        // check if there are only spaces entered
+        if (current_command_split[0] == NULL) {
             continue;
         }
 
-        if (strcmp(current_command_split[0], "exit") == 0) {
+        // add the command and the pid to the history
+        commands_history[history_counter] = strdup(copy_command);
+        pid_history[history_counter] = getpid();
+        
+        // check and execute "cd" and "history" commands
+        if (cd_command(current_command_split) || history_command(current_command_split, history_counter, pid_history, commands_history))
+        {
+            ++history_counter;
+            continue;
+        }
+
+        // check for exit command
+        if (strcmp(current_command_split[0], "exit") == 0)
+        {
             break;
         }
 
-        //handle the exec commands (normal commands)
+        // handle the exec commands (normal commands)
         pid_t pid = fork();
         if (pid == -1)
         {
@@ -105,5 +121,6 @@ int main(int argc, char *argv[])
             pid_history[history_counter] = pid;
             wait(NULL);
         }
-    } while (++history_counter);
+        ++history_counter;
+    } while (1);
 }
