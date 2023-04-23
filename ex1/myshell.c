@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
         if (pid == -1)
         {
             perror("fork failed");
-            break;
+            continue;
         }
         else if (pid == 0)
         {
