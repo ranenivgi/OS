@@ -20,7 +20,7 @@ rm -f *.out
 for i in $(ls)
 do
     if [ "${i##*.}" == "c" ] && grep -i -q "\b$2\b" "$i" ; then
-        gcc -w $i -o $i.out
+        gcc -w "$i" -o "${i%.*}.out"
     fi
 done
 
