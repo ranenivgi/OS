@@ -1,8 +1,8 @@
-all: ex31 ex32
+all: ex21 ex22
 
-ex31: ex31.c
-	gcc -o comp.out ex31.c
+ex31: ex21.c
+	gcc -o comp.out ex21.c
 
-ex32: ex32.c
-	gcc ex32.c 
+ex32: ex22.c
+	gcc ex22.c 
 
