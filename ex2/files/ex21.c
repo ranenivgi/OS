@@ -5,6 +5,16 @@
 #include <unistd.h>
 #include <ctype.h>
 
+/**
+ * @brief checks if the files are similar/same/different
+ * 
+ * @param r1 
+ * @param r2 
+ * @param result 
+ * @param c1 
+ * @param c2 
+ * @return int 
+ */
 int checkRead(int r1, int r2, int result, char c1, char c2)
 {
     if (r1 < 0 || r2 < 0)
@@ -33,6 +43,13 @@ int checkRead(int r1, int r2, int result, char c1, char c2)
     return 0;
 }
 
+/**
+ * @brief reads char by char to a buffer and compares them
+ * 
+ * @param first 
+ * @param second 
+ * @return int 
+ */
 int compareFiles(int first, int second)
 {
     int result = -1;
@@ -58,6 +75,7 @@ int compareFiles(int first, int second)
             continue;
         }
 
+        // removes spaces to check similarity
         if ((c1 == ' ' || c1 == '\n') && r1 != 0)
         {
             r1 = read(first, &c1, 1);
@@ -72,6 +90,7 @@ int compareFiles(int first, int second)
             continue;
         }
 
+        // case insensitive to check similarity
         if (tolower(c1) == tolower(c2))
         {
             result = 3;
@@ -80,6 +99,7 @@ int compareFiles(int first, int second)
             continue;
         }
 
+        // checks if they are different
         if (c1 != c2)
         {
             return 2;
