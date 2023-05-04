@@ -77,7 +77,88 @@ int compile(char *compile_file_path, int errors, struct dirent *student_name, in
     return 1;
 }
 
-int rateStudent(struct dirent* student_name, char *student_folder_path, int results, int errors)
+int runExecutable(int input_dir, int student_output, int errors)
+{
+    pid_t pid;
+    int status;
+
+    pid = fork();
+    if (pid < 0)
+    {
+        write(2, "Error in: fork\n", strlen("Error in: fork\n"));
+        return 0;
+    }
+    if (pid == 0)
+    {
+        if (lseek(input_dir, 0, SEEK_SET) == -1)
+        {
+            write(2, "Error in: lseek\n", strlen("Error in: lseek\n"));
+            return 0;
+        }
+        if (dup2(student_output, STDOUT_FILENO) == -1 || dup2(input_dir, STDIN_FILENO) == -1 || dup2(errors, STDERR_FILENO) == -1)
+        {
+            write(2, "Error in: dup2\n", strlen("Error in: dup2\n"));
+            return 0;
+        }
+
+        if (execl("compiled_file.out", "compiled_file.out", NULL) == -1)
+        {
+            write(2, "Error in: execl\n", strlen("Error in: execl\n"));
+            return 0;
+        }
+    }
+    else
+    {
+        wait(&status);
+    }
+    return 1;
+}
+
+int compareOutput(char *output, int results, struct dirent *student_name)
+{
+    pid_t pid;
+    int status;
+
+    pid = fork();
+    if (pid < 0)
+    {
+        write(2, "Error in: fork\n", strlen("Error in: fork\n"));
+        return 0;
+    }
+    if (pid == 0)
+    {
+        if (execl("comp.out", "comp.out", "student_output.txt", output, NULL) == -1)
+        {
+            write(2, "Error in: fork\n", strlen("Error in: execl\n"));
+            return 0;
+        }
+    }
+
+    else
+    {
+        wait(&status);
+
+        int check_status = WEXITSTATUS(status);
+
+        if (check_status == 1)
+        {
+            write(results, student_name->d_name, strlen(student_name->d_name));
+            write(results, ",100,EXCELLENT\n", strlen(",100,EXCELLENT\n"));
+        }
+        else if (check_status == 2)
+        {
+            write(results, student_name->d_name, strlen(student_name->d_name));
+            write(results, ",50,WRONG\n", strlen(",50,WRONG\n"));
+        }
+        else if (check_status == 3)
+        {
+            write(results, student_name->d_name, strlen(student_name->d_name));
+            write(results, ",75,SIMILAR\n", strlen(",75,SIMILAR\n"));
+        }
+    }
+}
+
+int rateStudent(struct dirent *student_name, char *student_folder_path, int results, int errors, int input_dir, int student_output, char *output)
 {
     char *opendir_err = "Error in: opendir\n";
 
@@ -90,6 +171,7 @@ int rateStudent(struct dirent* student_name, char *student_folder_path, int resu
         exit(-1);
     }
 
+    int c_file_exists = 0;
     while ((file_iterator = readdir(students_dir)) != NULL)
     {
         // skip over the '.' and '..' entries
@@ -115,14 +197,28 @@ int rateStudent(struct dirent* student_name, char *student_folder_path, int resu
             continue;
         }
 
+        c_file_exists = 1;
+
         // compile the .c file, move to the next student if it doesn't work
         if (!compile(compile_file_path, errors, student_name, results))
         {
             break;
         }
 
+        if (!runExecutable(input_dir, student_output, errors))
+        {
+            break;
+        }
+
+        if (!compareOutput(output, results, student_name))
+        {
+            break;
+        }
+
+        closedir(students_dir);
         break;
     }
+    return c_file_exists;
 }
 
 int main(int argc, char *argv[])
@@ -221,12 +317,21 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    int c_file_exists = 0;
     // looping through the directory, printing the directory entry name
     while ((student_name = readdir(students_dir)) != NULL)
     {
         // skip over the '.' and '..' entries
         if (strcmp(student_name->d_name, ".") == 0 || strcmp(student_name->d_name, "..") == 0)
         {
+            continue;
+        }
+
+        // create the output.txt file
+        int student_output = open("student_output.txt", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+        if (student_output == -1)
+        {
+            write(2, "Error in: open\n", strlen("Error in: open\n"));
             continue;
         }
 
@@ -242,8 +347,26 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        rateStudent(student_name, student_folder_path, results, errors);
+        // the function sends 0 if there is no .c file
+        if (!rateStudent(student_name, student_folder_path, results, errors, input_dir, student_output, output))
+        {
+            write(results, student_name->d_name, strlen(student_name->d_name));
+            write(results, ",0,NO_C_FILE\n", strlen(",0,NO_C_FILE\n"));
+        }
+
         printf("%s\n", student_folder_path);
+
+        if (close(student_output))
+        {
+            perror("Error in: close");
+        }
+
+        if (remove("student_output.txt"))
+        {
+            perror("Error in: remove");
+            return -1; // This will be a problem
+        }
+        remove("compiled_file.out"); // Error is OK
     }
     closedir(students_dir);
     close(input_dir);
