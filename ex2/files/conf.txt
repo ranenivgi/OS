@@ -1,3 +1,0 @@
-students
-io/input.txt
-io/correct_output.txt
