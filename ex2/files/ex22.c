@@ -138,7 +138,6 @@ int compareOutput(char *output, int results, struct dirent *student_name)
     {
         wait(&status);
 
-
         int check_status = WEXITSTATUS(status);
 
         if (check_status == 1)
