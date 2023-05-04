@@ -362,14 +362,6 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        // create the output.txt file
-        int student_output = open("student_output.txt", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-        if (student_output == -1)
-        {
-            write(2, "Error in: open\n", strlen("Error in: open\n"));
-            continue;
-        }
-
         // get the student full path
         char student_folder_path[150] = "";
         strcpy(student_folder_path, students);
@@ -379,10 +371,14 @@ int main(int argc, char *argv[])
         // check that the student path is a folder
         if (!isFolder(student_folder_path))
         {
-            if (close(student_output))
-            {
-                write(2, "Error in: close\n", strlen("Error in: close\n"));
-            }
+            continue;
+        }
+
+                // create the output.txt file
+        int student_output = open("student_output.txt", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+        if (student_output == -1)
+        {
+            write(2, "Error in: open\n", strlen("Error in: open\n"));
             continue;
         }
 
