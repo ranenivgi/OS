@@ -43,6 +43,7 @@ void BoundedQueue_init(BoundedQueue *queue, int max_size)
     queue->size = 0;
     queue->headIndex = 0;
     queue->tailIndex = 0;
+
     CountingSemaphore_init(&queue->empty_sem, max_size);
     CountingSemaphore_init(&queue->full_sem, 0);
     pthread_mutex_init(&queue->mutex, NULL);
@@ -50,7 +51,7 @@ void BoundedQueue_init(BoundedQueue *queue, int max_size)
 
 void BoundedQueue_enqueue(BoundedQueue *queue, char *s)
 {
-    // Increase one to the empty semaphore
+    // Decrease one to the empty semaphore
     CountingSemaphore_down(&queue->empty_sem);
     // Lock the thread to prevent race condition
     pthread_mutex_lock(&queue->mutex);
@@ -62,7 +63,7 @@ void BoundedQueue_enqueue(BoundedQueue *queue, char *s)
     queue->size++;
     // Release the lock
     pthread_mutex_unlock(&queue->mutex);
-    // Decrease one from the full semaphore
+    // Increase one from the full semaphore
     CountingSemaphore_up(&queue->full_sem);
 }
 
@@ -100,6 +101,7 @@ void bounded_queue_destroy(BoundedQueue *queue)
 void Queue_init(Queue *queue)
 {
     queue->buffer = malloc(sizeof(char *));
+    queue->buffer[0] = NULL;
     queue->capacity = 1; // Start with a capacity of 1
     queue->size = 0;
     queue->headIndex = 0;
@@ -141,8 +143,8 @@ void Queue_enqueue(Queue *queue, const char *s)
     queue->buffer = new_buffer;
     queue->capacity++;
     queue->buffer[queue->capacity - 1] = strdup(s);
-    //queue->tailIndex = (queue->tailIndex + 1) % queue->capacity;
-    //queue->size++;
+    // queue->tailIndex = (queue->tailIndex + 1) % queue->capacity;
+    // queue->size++;
     pthread_mutex_unlock(&queue->mutex);
     CountingSemaphore_up(&queue->full_sem);
 }
@@ -156,7 +158,7 @@ char *Queue_dequeue(Queue *queue)
     CountingSemaphore_down(&queue->full_sem);
     pthread_mutex_lock(&queue->mutex);
     char *result = queue->buffer[queue->headIndex];
-    queue->headIndex = (queue->headIndex + 1);
+    queue->headIndex++;
     queue->size--;
     pthread_mutex_unlock(&queue->mutex);
     return result;
@@ -225,6 +227,7 @@ void *producer_thread(void *arg)
     BoundedQueue *queue = params->queue;
 
     int sports = 0, news = 0, weather = 0;
+    srand(time(NULL)); // Set the seed value using the current time
 
     for (int i = 0; i < numberOfProducts; ++i)
     {
@@ -245,9 +248,7 @@ void *producer_thread(void *arg)
         }
         char s[MAX_STRING_LENGTH];
         snprintf(s, MAX_STRING_LENGTH, "Producer %d %s", id, product);
-        printf("%s!@#!@#!@#!@#!@#\n", s);
         BoundedQueue_enqueue(queue, s);
-        printf("%s\n", s);
     }
 
     BoundedQueue_enqueue(queue, "DONE");
@@ -268,12 +269,21 @@ void *dispatcher_thread(void *arg)
     while (ended != num_producers)
     {
         char *s = BoundedQueue_dequeue(producers_queues[current_queue]);
-        if (s == NULL || strcmp(s, "") == 0)
+        int x = current_queue;
+        current_queue = (current_queue + 1) % num_producers;
+        if (s == NULL)
         {
+            continue;
+        }
+        if (strcmp(s, "") == 0)
+        {
+            BoundedQueue_enqueue(producers_queues[x], "");
             continue;
         }
         if (strcmp(s, "DONE") == 0)
         {
+            // Add empty flag to know that we finished the queue
+            BoundedQueue_enqueue(producers_queues[x], "");
             ended++;
             continue;
         }
@@ -289,15 +299,13 @@ void *dispatcher_thread(void *arg)
         {
             Queue_enqueue(co_editors_queues[2], s);
         }
-        current_queue = (current_queue + 1) % num_producers;
-        printf("PINK ------> %s\n", s);
     }
 
     for (int i = 0; i < 3; ++i)
     {
         Queue_enqueue(co_editors_queues[i], "DONE");
+        Queue_enqueue(co_editors_queues[i], "");
     }
-
     return NULL;
 }
 
@@ -317,11 +325,11 @@ void *co_editor_thread(void *arg)
         {
             break;
         }
-        // usleep(500000);
-        // BoundedQueue_enqueue(screen_queue, s);
+        usleep(500000);
+        BoundedQueue_enqueue(screen_queue, s);
     }
 
-    // BoundedQueue_enqueue(screen_queue, "DONE");
+    BoundedQueue_enqueue(screen_queue, "DONE");
 
     return NULL;
 }
@@ -342,8 +350,8 @@ int main(int argc, char const *argv[])
     }
 
     char config[MAX_STRING_LENGTH + 1];
-    int size = fread(config, sizeof(char), MAX_STRING_LENGTH, file);
-    config[size] = '\0';
+    int temp = fread(config, sizeof(char), MAX_STRING_LENGTH, file);
+    config[temp] = '\0';
 
     fclose(file);
 
@@ -378,13 +386,6 @@ int main(int argc, char const *argv[])
     {
         co_editors_queues[i] = (Queue *)malloc(sizeof(Queue));
         Queue_init(co_editors_queues[i]);
-        struct CoEditorParams *params = (struct CoEditorParams *)malloc(sizeof(struct CoEditorParams));
-        params->id = i + 1;
-        params->screen_queue = screenQueue;
-        params->co_editor_queue = co_editors_queues[i];
-        pthread_t thread;
-        pthread_create(&thread, NULL, co_editor_thread, params);
-        pthread_detach(thread);
     }
 
     struct DispatcherParams *dispatcher_params = (struct DispatcherParams *)malloc(sizeof(struct DispatcherParams));
@@ -392,10 +393,40 @@ int main(int argc, char const *argv[])
     dispatcher_params->co_editors_queues = co_editors_queues;
     dispatcher_params->num_producers = num_producers;
 
-    dispatcher_thread(dispatcher_params);
-    // pthread_t dispatcher_thread_id;
-    // pthread_create(&dispatcher_thread_id, NULL, dispatcher_thread, dispatcher_params);
-    // pthread_join(dispatcher_thread_id, NULL);
+    // dispatcher_thread(dispatcher_params);
+    pthread_t dispatcher_thread_id;
+    pthread_create(&dispatcher_thread_id, NULL, dispatcher_thread, dispatcher_params);
+
+    for (int i = 0; i < 3; i++)
+    {
+        struct CoEditorParams *params = (struct CoEditorParams *)malloc(sizeof(struct CoEditorParams));
+        params->id = i;
+        params->screen_queue = screenQueue;
+        params->co_editor_queue = co_editors_queues[i];
+        pthread_t thread;
+        pthread_create(&thread, NULL, co_editor_thread, params);
+        pthread_detach(thread);
+    }
+
+    pthread_join(dispatcher_thread_id, NULL);
+
+    int ended = 0;
+    while (ended != 3)
+    {
+        char *s = BoundedQueue_dequeue(screenQueue);
+        if (s == NULL)
+        {
+            continue;
+        }
+        if (strcmp(s, "") == 0)
+            continue;
+        if (strcmp(s, "DONE") == 0)
+        {
+            ended++;
+            continue;
+        }
+        printf("%s\n", s);
+    }
 
     for (int i = 0; i < num_producers; i++)
     {
