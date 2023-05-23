@@ -68,6 +68,10 @@ void BoundedQueue_enqueue(BoundedQueue *queue, char *s)
 
 char *BoundedQueue_dequeue(BoundedQueue *queue)
 {
+    if (queue->buffer[queue->headIndex] == NULL)
+    {
+        return NULL;
+    }
     CountingSemaphore_down(&queue->full_sem);
     pthread_mutex_lock(&queue->mutex);
     char *result = queue->buffer[queue->headIndex];
@@ -87,9 +91,9 @@ void bounded_queue_destroy(BoundedQueue *queue)
     free(queue->buffer);
     pthread_mutex_destroy(&queue->mutex);
     pthread_mutex_destroy(&queue->full_sem.mutex);
-    pthread_cond_destroy(&queue->full_sem.cond);
+    pthread_mutex_destroy(&queue->full_sem.cond);
     pthread_mutex_destroy(&queue->empty_sem.mutex);
-    pthread_cond_destroy(&queue->empty_sem.cond);
+    pthread_mutex_destroy(&queue->empty_sem.cond);
 }
 
 // Unbounded queue functions
@@ -107,41 +111,52 @@ void Queue_init(Queue *queue)
 void Queue_enqueue(Queue *queue, const char *s)
 {
     pthread_mutex_lock(&queue->mutex);
-    if (queue->size >= queue->capacity)
+    // if (queue->size >= queue->capacity)
+    // {
+    //     // Increase the capacity dynamically
+    //     int new_capacity = queue->capacity * 2;
+    //     char **new_buffer = realloc(queue->buffer, new_capacity * sizeof(char *));
+    //     if (new_buffer == NULL)
+    //     {
+    //         // Handle allocation failure
+    //     }
+    //     else
+    //     {
+    //         // // Free the previous buffer contents
+    //         // for (int i = 0; i < queue->size; i++)
+    //         // {
+    //         //     free(queue->buffer[i]);
+    //         // }
+    //         // // Free the previous buffer
+    //         // free(queue->buffer);
+    //         queue->buffer = new_buffer;
+    //         queue->capacity = new_capacity;
+    //     }
+    // }
+    char **new_buffer = realloc(queue->buffer, (queue->capacity + 1) * sizeof(char *));
+    if (new_buffer == NULL)
     {
-        // Increase the capacity dynamically
-        int new_capacity = queue->capacity * 2;
-        char **new_buffer = realloc(queue->buffer, new_capacity * sizeof(char *));
-        if (new_buffer == NULL)
-        {
-            // Handle allocation failure
-        }
-        else
-        {
-            // Free the previous buffer contents
-            for (int i = 0; i < queue->size; i++)
-            {
-                free(queue->buffer[i]);
-            }
-            // Free the previous buffer
-            free(queue->buffer);
-            queue->buffer = new_buffer;
-            queue->capacity = new_capacity;
-        }
+        // Handle allocation failure
     }
-    queue->buffer[queue->tailIndex] = strdup(s);
-    queue->tailIndex = (queue->tailIndex + 1) % queue->capacity;
-    queue->size = queue->size + 1;
+    queue->buffer = new_buffer;
+    queue->capacity++;
+    queue->buffer[queue->capacity - 1] = strdup(s);
+    //queue->tailIndex = (queue->tailIndex + 1) % queue->capacity;
+    //queue->size++;
     pthread_mutex_unlock(&queue->mutex);
     CountingSemaphore_up(&queue->full_sem);
 }
 
 char *Queue_dequeue(Queue *queue)
 {
+    if (queue->buffer[queue->headIndex] == NULL)
+    {
+        return NULL;
+    }
     CountingSemaphore_down(&queue->full_sem);
     pthread_mutex_lock(&queue->mutex);
     char *result = queue->buffer[queue->headIndex];
-    queue->headIndex = (queue->headIndex + 1) % queue->capacity;
+    queue->headIndex = (queue->headIndex + 1);
     queue->size--;
     pthread_mutex_unlock(&queue->mutex);
     return result;
@@ -159,39 +174,47 @@ void queue_destroy(Queue *queue)
     free(queue->buffer);
     pthread_mutex_destroy(&queue->mutex);
     pthread_mutex_destroy(&queue->full_sem.mutex);
-    pthread_cond_destroy(&queue->full_sem.cond);
+    pthread_mutex_destroy(&queue->full_sem.cond);
 }
 
 // Counting Semaphore functions
-void CountingSemaphore_init(CountingSemaphore *sem, int startValue)
+void CountingSemaphore_init(CountingSemaphore *semaphore, int startValue)
 {
-    sem->value = startValue;
-    pthread_mutex_init(&sem->mutex, NULL);
-    pthread_cond_init(&sem->cond, NULL);
+    semaphore->value = startValue;
+    pthread_mutex_init(&semaphore->mutex, NULL);
+    pthread_mutex_init(&semaphore->cond, NULL);
+    pthread_mutex_lock(&semaphore->cond);
 }
 
-void CountingSemaphore_down(CountingSemaphore *sem)
+void CountingSemaphore_down(CountingSemaphore *semaphore)
 {
-    pthread_mutex_lock(&sem->mutex);
-    while (sem->value <= 0)
+    pthread_mutex_lock(&semaphore->mutex);
+    semaphore->value--;
+    if (semaphore->value < 0)
     {
-        pthread_cond_wait(&sem->cond, &sem->mutex);
+        pthread_mutex_unlock(&semaphore->mutex);
+        pthread_mutex_lock(&semaphore->cond);
     }
-    sem->value--;
-    pthread_mutex_unlock(&sem->mutex);
+    pthread_mutex_unlock(&semaphore->mutex);
 }
 
-void CountingSemaphore_up(CountingSemaphore *sem)
+void CountingSemaphore_up(CountingSemaphore *semaphore)
 {
-    pthread_mutex_lock(&sem->mutex);
-    sem->value++;
-    pthread_cond_signal(&sem->cond);
-    pthread_mutex_unlock(&sem->mutex);
+    pthread_mutex_lock(&semaphore->mutex);
+    semaphore->value++;
+    if (semaphore->value <= 0)
+    {
+        pthread_mutex_unlock(&semaphore->cond);
+    }
+    else
+    {
+        pthread_mutex_unlock(&semaphore->mutex);
+    }
 }
 
-int counting_semaphore_value(CountingSemaphore *sem)
+int CountingSemaphore_value(const CountingSemaphore *semaphore)
 {
-    return sem->value;
+    return semaphore->value;
 }
 
 void *producer_thread(void *arg)
@@ -245,7 +268,7 @@ void *dispatcher_thread(void *arg)
     while (ended != num_producers)
     {
         char *s = BoundedQueue_dequeue(producers_queues[current_queue]);
-        if (strcmp(s, "") == 0)
+        if (s == NULL || strcmp(s, "") == 0)
         {
             continue;
         }
@@ -260,13 +283,14 @@ void *dispatcher_thread(void *arg)
         }
         if (strstr(s, "NEWS") != NULL)
         {
-            Queue_enqueue(co_editors_queues[0], s);
+            Queue_enqueue(co_editors_queues[1], s);
         }
         if (strstr(s, "WEATHER") != NULL)
         {
-            Queue_enqueue(co_editors_queues[0], s);
+            Queue_enqueue(co_editors_queues[2], s);
         }
         current_queue = (current_queue + 1) % num_producers;
+        printf("PINK ------> %s\n", s);
     }
 
     for (int i = 0; i < 3; ++i)
@@ -285,7 +309,7 @@ void *co_editor_thread(void *arg)
     while (1)
     {
         char *s = Queue_dequeue(params->co_editor_queue);
-        if (strcmp(s, "") == 0)
+        if (s == NULL || strcmp(s, "") == 0)
         {
             continue;
         }
@@ -293,11 +317,11 @@ void *co_editor_thread(void *arg)
         {
             break;
         }
-        //usleep(500000);
-        //BoundedQueue_enqueue(screen_queue, s);
+        // usleep(500000);
+        // BoundedQueue_enqueue(screen_queue, s);
     }
 
-    //BoundedQueue_enqueue(screen_queue, "DONE");
+    // BoundedQueue_enqueue(screen_queue, "DONE");
 
     return NULL;
 }
@@ -346,7 +370,6 @@ int main(int argc, char const *argv[])
         pthread_create(&thread, NULL, producer_thread, params);
         pthread_detach(thread);
     }
-
 
     BoundedQueue *screenQueue = (BoundedQueue *)malloc(sizeof(BoundedQueue));
     BoundedQueue_init(screenQueue, screenCapacity);
