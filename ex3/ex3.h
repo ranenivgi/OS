@@ -35,42 +35,41 @@ typedef struct
     pthread_mutex_t mutex;
 } Queue;
 
-struct ProducerParams
+typedef struct 
 {
     int id;
     int numberOfProducts;
     BoundedQueue *queue;
-};
+} ProducerParams;
 
-struct CoEditorParams
+typedef struct
 {
     int id;
-    Queue *co_editor_queue;
-    BoundedQueue *screen_queue;
-};
+    Queue *coEditorQueue;
+    BoundedQueue *screenQueue;
+} CoEditorParams;
 
-struct DispatcherParams
+typedef struct 
 {
-    BoundedQueue **producers_queues;
-    Queue **co_editors_queues;
-    int num_producers;
-};
+    BoundedQueue **producersQueues;
+    Queue **coEditorsQueues;
+    int producersNumber;
+} DispatcherParams;
 
-char **split(const char *s, char delim, int *num_tokens);
-void BoundedQueue_init(BoundedQueue *queue, int max_size);
-void BoundedQueue_enqueue(BoundedQueue *queue, char *s);
-void bounded_queue_destroy(BoundedQueue *queue);
+char **splitConfigFile(const char *s, char delim, int *num_tokens);
+void boundedQueueInit(BoundedQueue *queue, int max_size);
+void boundedQueuePush(BoundedQueue *queue, char *s);
+void boundedQueueDestroy(BoundedQueue *queue);
 
-void Queue_init(Queue *queue);
-void Queue_enqueue(Queue *queue, const char *s);
-char *Queue_dequeue(Queue *queue);
-void queue_destroy(Queue *queue);
+void unBoundedQueueInit(Queue *queue);
+void unBoundedQueuePush(Queue *queue, const char *s);
+char *unBondedQueuePop(Queue *queue);
+void unBondedQueueDestroy(Queue *queue);
 
-void CountingSemaphore_init(CountingSemaphore *sem, int startValue);
-void CountingSemaphore_down(CountingSemaphore *sem);
-void CountingSemaphore_up(CountingSemaphore *sem);
-int counting_semaphore_value(CountingSemaphore *sem);
+void semaphoreInit(CountingSemaphore *sem, int startValue);
+void semaphoreDecrease(CountingSemaphore *sem);
+void semaphoreIncrease(CountingSemaphore *sem);
 
-void *producer_thread(void *arg);
-void *dispatcher_thread(void *arg);
-void *co_editor_thread(void *arg);
+void *handleProducer(void *arg);
+void *handleDispatcher(void *arg);
+void *handleCoEditor(void *arg);
